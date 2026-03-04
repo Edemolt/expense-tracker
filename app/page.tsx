@@ -25,11 +25,14 @@ export default function Home() {
   const [paymentMethod, setPaymentMethod] = useState<string>('UPI');
   const [purchaseType, setPurchaseType] = useState<string>('Online');
   
-  // View State
-  const [activeTab, setActiveTab] = useState<'add' | 'charts'>('add');
-  const [showTotalBreakdown, setShowTotalBreakdown] = useState<boolean>(false); // NEW: Toggles the payment medium breakdown
+  // View State (Added 'history' and defaulted to 'add')
+  const [activeTab, setActiveTab] = useState<'history' | 'add' | 'charts'>('add');
+  const [showTotalBreakdown, setShowTotalBreakdown] = useState<boolean>(false); 
 
-  // Daily Details State (Unhidden Div)
+  // NEW: Global Month State (Defaults to current yyyy-MM)
+  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
+
+  // Daily Details State (Unhidden Div for Charts)
   const [selectedDayExpenses, setSelectedDayExpenses] = useState<Expense[]>([]);
   const [selectedDateLabel, setSelectedDateLabel] = useState<string>('');
 
@@ -75,6 +78,7 @@ export default function Home() {
 
     setAmount('');
     setDescription('');
+    // Reset date to today, but you can leave the month selection as is
     setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
     fetchExpenses();
     setActiveTab('charts'); 
@@ -86,10 +90,18 @@ export default function Home() {
   // -------------------------------------------------------------
   const safeExpenses = Array.isArray(expenses) ? expenses : [];
 
-  // NEW: Calculate Grand Total and Payment Medium Breakdown
-  const overallTotal = safeExpenses.reduce((sum, item) => sum + item.Amount, 0);
+  // NEW: Filter expenses specifically for the selected month
+  const monthlyExpenses = safeExpenses.filter(expense => expense.Date.startsWith(selectedMonth));
   
-  const paymentMethodBreakdown = safeExpenses.reduce((acc: { method: string; amount: number }[], curr) => {
+  // Sort monthly expenses from newest to oldest for the History table
+  const sortedMonthlyExpenses = [...monthlyExpenses].sort((a, b) => {
+    return new Date(b.Date + 'T' + b.Time).getTime() - new Date(a.Date + 'T' + a.Time).getTime();
+  });
+
+  // Calculate Grand Total and Breakdown specifically for the SELECTED MONTH
+  const monthlyTotal = monthlyExpenses.reduce((sum, item) => sum + item.Amount, 0);
+  
+  const paymentMethodBreakdown = monthlyExpenses.reduce((acc: { method: string; amount: number }[], curr) => {
     const existing = acc.find(item => item.method === curr.PaymentMethod);
     if (existing) {
       existing.amount += curr.Amount;
@@ -98,9 +110,9 @@ export default function Home() {
     }
     return acc;
   }, []);
-  // Sort breakdown from highest spent to lowest
-  paymentMethodBreakdown.sort((a, b) => b.amount - a.amount);
+  paymentMethodBreakdown.sort((a, b) => b.amount - a.amount); // Highest to lowest
 
+  // Chart Data Processing (Keeping this globally based or you can restrict it to the month too)
   const dailyData = safeExpenses.reduce((acc: { Date: string; Total: number }[], curr) => {
     const existingDate = acc.find(item => item.Date === curr.Date);
     if (existingDate) {
@@ -110,7 +122,6 @@ export default function Home() {
     }
     return acc;
   }, []);
-
   dailyData.sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime());
 
   const mainPieData = safeExpenses.reduce((acc: { name: string; value: number }[], curr) => {
@@ -124,7 +135,6 @@ export default function Home() {
   }, []);
 
   const dailyDetailTotal = selectedDayExpenses.reduce((sum, item) => sum + item.Amount, 0);
-  
   const dailyDetailPieData = selectedDayExpenses.reduce((acc: { name: string; value: number }[], curr) => {
     const existingItem = acc.find(item => item.name === curr.Description);
     if (existingItem) {
@@ -164,19 +174,29 @@ export default function Home() {
     );
   };
 
+  // Helper to safely format "yyyy-MM" into a readable month name (e.g., "March 2026")
+  const formattedMonthName = (() => {
+    try {
+      return format(new Date(`${selectedMonth}-02T00:00:00`), 'MMMM yyyy');
+    } catch {
+      return selectedMonth;
+    }
+  })();
+
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-300 font-sans selection:bg-blue-500/30 pb-20 overflow-x-hidden">
       
-      {/* Navbar */}
+      {/* Navbar - Now with 3 items */}
       <nav className="sticky top-0 z-40 bg-zinc-900/80 backdrop-blur-md border-b border-zinc-800 shadow-sm shadow-black/20">
         <div className="max-w-5xl mx-auto px-6 h-16 flex items-center justify-between">
           <h1 className="text-xl font-bold tracking-wide text-zinc-100 flex items-center gap-2">
             <span className="w-3 h-3 rounded-full bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.6)]"></span>
             Tracker
           </h1>
-          <div className="flex space-x-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-            <button onClick={() => setActiveTab('add')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'add' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>Add Expense</button>
-            <button onClick={() => setActiveTab('charts')} className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all duration-200 ${activeTab === 'charts' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>Charts</button>
+          <div className="flex space-x-1 sm:space-x-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800 overflow-x-auto">
+            <button onClick={() => setActiveTab('history')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 whitespace-nowrap ${activeTab === 'history' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>History</button>
+            <button onClick={() => setActiveTab('add')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 whitespace-nowrap ${activeTab === 'add' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>Add Expense</button>
+            <button onClick={() => setActiveTab('charts')} className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 whitespace-nowrap ${activeTab === 'charts' ? 'bg-zinc-800 text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-300'}`}>Charts</button>
           </div>
         </div>
       </nav>
@@ -184,19 +204,91 @@ export default function Home() {
       {/* Main Content Area */}
       <main className="max-w-5xl mx-auto p-6 mt-8 relative">
         
+        {/* VIEW: HISTORY */}
+        {activeTab === 'history' && (
+          <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            
+            {/* History Header & Month Selector */}
+            <div className="bg-zinc-900 border border-zinc-800 p-6 rounded-2xl shadow-xl shadow-black/40 flex flex-col sm:flex-row justify-between items-center gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white">Monthly Ledger</h2>
+                <p className="text-sm text-zinc-400 mt-1">View every transaction for a specific month.</p>
+              </div>
+              <div className="w-full sm:w-auto">
+                <input 
+                  type="month" 
+                  value={selectedMonth} 
+                  onChange={(e) => setSelectedMonth(e.target.value)} 
+                  style={{ colorScheme: 'dark' }} 
+                  className="w-full sm:w-auto bg-zinc-950 border border-zinc-700 text-zinc-200 p-3 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" 
+                />
+              </div>
+            </div>
+
+            {/* The Detailed Table */}
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden flex flex-col shadow-2xl shadow-black/50">
+              <div className="bg-zinc-800 p-4 border-b border-zinc-700 flex justify-between items-center">
+                <span className="font-bold text-zinc-100 uppercase tracking-wider text-sm">Total in {formattedMonthName}</span>
+                <span className="font-bold text-2xl text-blue-400 font-mono">₹{monthlyTotal.toFixed(2)}</span>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-zinc-300">
+                  <thead className="bg-zinc-800/50 text-xs uppercase text-zinc-500">
+                    <tr>
+                      <th className="px-6 py-4 font-semibold">Date & Time</th>
+                      <th className="px-6 py-4 font-semibold">Description</th>
+                      <th className="px-6 py-4 font-semibold text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800">
+                    {sortedMonthlyExpenses.length > 0 ? (
+                      sortedMonthlyExpenses.map((expense, idx) => (
+                        <tr key={idx} className="hover:bg-zinc-800/50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="block font-medium text-zinc-300">
+                              {(() => { try { return format(new Date(expense.Date), 'MMM do') } catch { return expense.Date } })()}
+                            </span>
+                            <span className="font-mono text-xs text-zinc-500">{expense.Time.substring(0, 5)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {expense.Description} 
+                            <span className="text-[10px] block text-zinc-600 mt-1 uppercase tracking-wide">
+                              {expense.PaymentMethod} • {expense.PurchaseType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right font-mono text-blue-400 font-medium">₹{expense.Amount.toFixed(2)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={3} className="px-6 py-12 text-center text-zinc-500 italic">
+                          No expenses recorded for {formattedMonthName}.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* VIEW: ADD EXPENSE */}
         {activeTab === 'add' && (
           <div className="max-w-md mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
             
-            {/* NEW: Total Spent Widget */}
+            {/* Total Spent Widget (Now specifically shows the selected month) */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl shadow-black/40 overflow-hidden">
               <div 
                 className="p-6 cursor-pointer hover:bg-zinc-800/80 transition-colors flex justify-between items-center"
                 onClick={() => setShowTotalBreakdown(!showTotalBreakdown)}
               >
                 <div>
-                  <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Total Spent Till Now</h3>
-                  <p className="text-3xl font-bold text-blue-500 font-mono mt-1">₹{overallTotal.toFixed(2)}</p>
+                  <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+                    Spent in {formattedMonthName}
+                  </h3>
+                  <p className="text-3xl font-bold text-blue-500 font-mono mt-1">₹{monthlyTotal.toFixed(2)}</p>
                 </div>
                 <div className={`text-zinc-500 transform transition-transform duration-300 ${showTotalBreakdown ? 'rotate-180' : ''}`}>
                   ▼
@@ -218,7 +310,7 @@ export default function Home() {
                       </div>
                     ))}
                     {paymentMethodBreakdown.length === 0 && (
-                      <p className="text-sm text-zinc-500 italic text-center py-2">No expenses recorded yet.</p>
+                      <p className="text-sm text-zinc-500 italic text-center py-2">No expenses in {formattedMonthName}.</p>
                     )}
                   </div>
                 </div>
