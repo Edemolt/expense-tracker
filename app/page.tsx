@@ -289,10 +289,11 @@ export default function Home() {
                     maxBarSize={50} 
                     cursor="pointer"
                     onClick={(data) => {
-                      if (data && data.Date) {
-                        const dayExpenses = safeExpenses.filter(e => e.Date === data.Date);
+                      const date = (data as unknown as { Date?: string })?.Date;
+                      if (date) {
+                        const dayExpenses = safeExpenses.filter(e => e.Date === date);
                         setSelectedDayExpenses(dayExpenses);
-                        setSelectedDateLabel(data.Date);
+                        setSelectedDateLabel(date);
                         window.scrollTo({ top: 400, behavior: 'smooth' });
                       }
                     }}
